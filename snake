@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nokia 3310 Snake II (Browser Edition)</title>
+    <style>
+        /* Centers everything on the screen and sets a dark background */
+        body {
+            background-color: #222;
+            color: #1c2418;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* Container that resembles the retro green LCD screen layout */
+        .game-container {
+            background-color: #8da382;
+            padding: 20px;
+            border: 15px solid #333;
+            border-radius: 10px;
+            box-shadow: 0px 10px 20px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .scoreboard {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* The actual canvas boundary matching the aspect ratio */
+        canvas {
+            border: 3px solid #1c2418;
+            background-color: #8da382;
+            display: block;
+        }
+
+        .instructions {
+            margin-top: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="scoreboard">
+        <div id="score">Score: 0</div>
+        <div id="highScore">High: 0</div>
+    </div>
+    
+    <!-- Game grid dimension setup -->
+    <canvas id="gameCanvas" width="420" height="240"></canvas>
+    
+    <div class="instructions">USE ARROW KEYS TO CONTROL</div>
+</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Dimensions matching our Nokia scale
+    const grid = 10;
+    let score = 0;
+    let highScore = 0;
+
+    // Snake properties
+    let snake = {
+        x: 210,
+        y: 120,
+        dx: 0,
+        dy: 0,
+        cells: [{x: 210, y: 120}],
+        maxCells: 1
+    };
+
+    // Food properties
+    let food = { x: 60, y: 60 };
+
+    // Bonus bug properties
+    let bonus = { x: -100, y: -100, active: false, timer: 0, flash: true };
+
+    // Prevent screen scrolling when pressing arrow keys
+    window.addEventListener("keydown", function(e) {
+        if(["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.code) > -1) {
+            e.preventDefault();
+        }
+    }, false);
+
+    // Capture directional inputs and prevent direct 180-degree backtracking
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowLeft' && snake.dx === 0) {
+            snake.dx = -grid;
+            snake.dy = 0;
+        } else if (e.key === 'ArrowUp' && snake.dy === 0) {
+            snake.dy = -grid;
+            snake.dx = 0;
+        } else if (e.key === 'ArrowRight' && snake.dx === 0) {
+            snake.dx = grid;
+            snake.dy = 0;
+        } else if (e.key === 'ArrowDown' && snake.dy === 0) {
+            snake.dy = grid;
+            snake.dx = 0;
+        }
+    });
+
+    // Helper to generate aligned random coordinates on the grid
+    function getRandomInt(min, max) {
+        return Math.floor(Math.random() * (max - min) + min);
+    }
+
+    function respawnFood() {
+        food.x = Math.floor(getRandomInt(0, canvas.width / grid)) * grid;
+        food.y = Math.floor(getRandomInt(0, canvas.height / grid)) * grid;
+    }
+
+    function resetGame() {
+        if (score > highScore) {
+            highScore = score;
+            document.getElementById('highScore').innerText = "High: " + highScore;
+        }
+        score = 0;
+        document.getElementById('score').innerText = "Score: " + score;
+        
+        snake.x = 210;
+        snake.y = 120;
+        snake.cells = [{x: 210, y: 120}];
+        snake.maxCells = 1;
+        snake.dx = 0;
+        snake.dy = 0;
+        
+        bonus.active = false;
+        bonus.x = -100;
+        bonus.y = -100;
+        
+        respawnFood();
+    }
+
+    // Core Frame Update Engine Loop
+    function gameLoop() {
+        // Lower frame rate execution to mimic old hardware processing limits (~12 FPS)
+        setTimeout(function() {
+            requestAnimationFrame(gameLoop);
+        }, 80);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Move head by velocity metrics
+        snake.x += snake.dx;
+        snake.y += snake.dy;
+
+        // Nokia Wall Wrapping Mechanic Engine
+        if (snake.x < 0) {
+            snake.x = canvas.width - grid;
+        } else if (snake.x >= canvas.width) {
+            snake.x = 0;
+        }
+        
+        if (snake.y < 0) {
+            snake.y = canvas.height - grid;
+        } else if (snake.y >= canvas.height) {
+            snake.y = 0;
+        }
+
+        // Add current head position to front of tracking array
+        if (snake.dx !== 0 || snake.dy !== 0) {
+            snake.cells.unshift({x: snake.x, y: snake.y});
+        }
+
+        // Limit tracking array length to snake size
+        if (snake.cells.length > snake.maxCells) {
+            snake.cells.pop();
+        }
+
+        // Draw Normal Food
+        ctx.fillStyle = '#1c2418';
+        ctx.beginPath();
+        ctx.arc(food.x + grid/2, food.y + grid/2, grid/2.5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Bonus Treat Logic and Expiration
+        if (bonus.active) {
+            bonus.timer--;
+            if (bonus.timer % 4 === 0) bonus.flash = !bonus.flash;
+            
+            if (bonus.flash) {
+                ctx.fillStyle = '#1c2418';
+                ctx.fillRect(bonus.x, bonus.y, grid + 2, grid + 2);
+            }
+            
+            // Check for bonus ingestion
+            if (snake.x === bonus.x && snake.y === bonus.y) {
+                score += 50;
+                document.getElementById('score').innerText = "Score: " + score;
+                bonus.active = false;
+            } else if (bonus.timer <= 0) {
+                bonus.active = false;
+            }
+        }
+
+        // Render Snake & Check self-collisions
+        ctx.fillStyle = '#1c2418';
+        snake.cells.forEach(function(cell, index) {
+            ctx.fillRect(cell.x, cell.y, grid - 1, grid - 1);
+
+            // Food collision validation check
+            if (cell.x === food.x && cell.y === food.y) {
+                snake.maxCells++;
+                score += 10;
+                document.getElementById('score').innerText = "Score: " + score;
+                respawnFood();
+
+                // 30% chance to spawn classic bonus item
+                if (!bonus.active && Math.random() < 0.3) {
+                    bonus.x = Math.floor(getRandomInt(0, canvas.width / grid)) * grid;
+                    bonus.y = Math.floor(getRandomInt(0, canvas.height / grid)) * grid;
+                    bonus.active = true;
+                    bonus.timer = 60; 
+                }
+            }
+
+            // Verify tail crash execution loop rules
+            for (let i = index + 1; i < snake.cells.length; i++) {
+                if (cell.x === snake.cells[i].x && cell.y === snake.cells[i].y) {
+                    resetGame();
+                }
+            }
+        });
+    }
+
+    // Fire initialization engine sequences
+    respawnFood();
+    requestAnimationFrame(gameLoop);
+</script>
+
+</body>
+</html>
